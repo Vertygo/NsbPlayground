@@ -95,6 +95,7 @@ namespace Sender
 				}
 			}
 
+			connector.Stop().GetAwaiter().GetResult();
 			Console.ReadLine();
 		}
 	}
