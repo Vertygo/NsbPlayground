@@ -12,10 +12,21 @@ namespace Sender
 		/// <summary>
 		/// Run docker instance:
 		///		docker run -d --hostname my-rabbit --name some-rabbit -p 15672:15672 -p 5672:5672 rabbitmq:3-management
+		///
+		/// Dummy SQL table:
+		///  CREATE TABLE [dbo].[TestTable](
+		///  [Id] [int] IDENTITY(1,1) NOT NULL,
+		///  [Name] [varchar](10) NOT NULL,
+		///  CONSTRAINT [PK_TestTable] PRIMARY KEY CLUSTERED 
+		///  (
+		///  [Id] ASC
+		///  )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON) ON [PRIMARY])  ON [PRIMARY]
+		/// GO
 		/// </summary>
 		/// <param name="args"></param>
 		static void Main(string[] args)
 		{
+			Console.Title = "Sender";
 			string connectionString = @"Data Source=.\MYDEV;Initial Catalog=update_and_publish;Integrated Security=True;Max Pool Size=100";
 			var storage = new SqlSubscriptionStorage(() => new SqlConnection(connectionString), "WebApplication", new SqlDialect.MsSqlServer(), null);
 			storage.Install().GetAwaiter().GetResult();
@@ -28,6 +39,10 @@ namespace Sender
 				{
 					extensions.ConnectionString("host=localhost;username=guest;password=guest");
 					extensions.UseConventionalRoutingTopology();
+				},
+				customizeConnectedInterface: configuration =>
+				{
+					configuration.EnableMessageDrivenPublishSubscribe(storage);
 				});
 			connectorConfig.AutoCreateQueues();
 
@@ -39,6 +54,8 @@ namespace Sender
 			//Start the connector
 			var connector = connectorConfig.CreateConnector();
 			connector.Start().GetAwaiter().GetResult();
+
+			Console.WriteLine("(Q) Quit (R) Rollback (Any other key) Write to TestTable and publish message");
 
 			while(true)
 			{
@@ -59,7 +76,19 @@ namespace Sender
 						
 						message.Publish(new MyMessage {Message = $"Test {key}"}).ConfigureAwait(false);
 
-						tran.Commit();
+						using (var command = new SqlCommand("INSERT INTO TestTable VALUES ('Test')", sqlConn, tran))
+						{
+							command.ExecuteNonQuery();
+						}
+
+						if (key.Key == ConsoleKey.R)
+						{
+							tran.Rollback(); // Simulate rollback
+						}
+						else
+						{
+							tran.Commit(); // Business as usual
+						}
 					}
 
 					sqlConn.Close();
