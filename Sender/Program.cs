@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Data.SqlClient;
+using System.Threading.Tasks;
 using NServiceBus;
 using NServiceBus.Connector.SqlServer;
 using NServiceBus.Router;
@@ -25,78 +26,79 @@ namespace Sender
 		/// </summary>
 		/// <param name="args"></param>
 		static void Main(string[] args)
-		{
-			Console.Title = "Sender";
-			string connectionString = @"Data Source=.\MYDEV;Initial Catalog=update_and_publish;Integrated Security=True;Max Pool Size=100";
-			var storage = new SqlSubscriptionStorage(() => new SqlConnection(connectionString), "WebApplication", new SqlDialect.MsSqlServer(), null);
-			storage.Install().GetAwaiter().GetResult();
+        {
+            Start().GetAwaiter().GetResult();
+        }
 
-			//The system uses RabbitMQ transport
-			var connectorConfig = new ConnectorConfiguration<RabbitMQTransport>(
-				name: "WebApplication",
-				sqlConnectionString: connectionString,
-				customizeConnectedTransport: extensions =>
-				{
-					extensions.ConnectionString("host=localhost;username=guest;password=guest");
-					extensions.UseConventionalRoutingTopology();
-				},
-				customizeConnectedInterface: configuration =>
-				{
-					configuration.EnableMessageDrivenPublishSubscribe(storage);
-				});
-			connectorConfig.AutoCreateQueues();
+        static async Task Start()
+        {
+            Console.Title = "Sender";
+            string connectionString = @"Data Source=(local);Initial Catalog=test3;Integrated Security=True;Max Pool Size=100";
+            var storage = new SqlSubscriptionStorage(() => new SqlConnection(connectionString), "WebApplication",
+                new SqlDialect.MsSqlServer(), null);
+            storage.Install().GetAwaiter().GetResult();
 
-			//Configure where to send messages
-			connectorConfig.RouteToEndpoint(
-				messageType: typeof(MyMessage),
-				endpointName: "Samples.ASPNETCore.Endpoint");
+            //The system uses RabbitMQ transport
+            var connectorConfig = new ConnectorConfiguration<RabbitMQTransport>(
+                name: "WebApplication",
+                sqlConnectionString: connectionString,
+                customizeConnectedTransport: extensions =>
+                {
+                    extensions.ConnectionString("host=localhost;username=guest;password=guest");
+                    extensions.UseConventionalRoutingTopology();
+                },
+                customizeConnectedInterface: configuration => { configuration.EnableMessageDrivenPublishSubscribe(storage); });
+            connectorConfig.AutoCreateQueues();
 
-			//Start the connector
-			var connector = connectorConfig.CreateConnector();
-			connector.Start().GetAwaiter().GetResult();
+            //Configure where to send messages
+            connectorConfig.RouteToEndpoint(
+                messageType: typeof(MyMessage),
+                endpointName: "Samples.ASPNETCore.Endpoint");
 
-			Console.WriteLine("(Q) Quit (R) Rollback (Any other key) Write to TestTable and publish message");
+            //Start the connector
+            var connector = connectorConfig.CreateConnector();
+            await connector.Start();
 
-			while(true)
-			{
-				var key = Console.ReadKey();
-				Console.WriteLine();
+            Console.WriteLine("(Q) Quit (R) Rollback (Any other key) Write to TestTable and publish message");
 
-				if (key.Key == ConsoleKey.Q)
-				{
-					break;
-				}
+            while (true)
+            {
+                var key = Console.ReadKey();
+                Console.WriteLine();
 
-				using (var sqlConn = new SqlConnection(connectionString))
-				{
-					sqlConn.Open();
-					using (var tran = sqlConn.BeginTransaction())
-					{
-						var message = connector.GetSession(sqlConn, tran);
-						
-						message.Publish(new MyMessage {Message = $"Test {key}"}).ConfigureAwait(false);
+                if (key.Key == ConsoleKey.Q)
+                {
+                    break;
+                }
 
-						using (var command = new SqlCommand("INSERT INTO TestTable VALUES ('Test')", sqlConn, tran))
-						{
-							command.ExecuteNonQuery();
-						}
+                using (var sqlConn = new SqlConnection(connectionString))
+                {
+                    await sqlConn.OpenAsync();
+                    using (var tran = sqlConn.BeginTransaction())
+                    {
+                        var message = connector.GetSession(sqlConn, tran);
 
-						if (key.Key == ConsoleKey.R)
-						{
-							tran.Rollback(); // Simulate rollback
-						}
-						else
-						{
-							tran.Commit(); // Business as usual
-						}
-					}
+                        await message.Publish(new MyMessage {Message = $"Test {key}"}).ConfigureAwait(false);
 
-					sqlConn.Close();
-				}
-			}
+                        using (var command = new SqlCommand("INSERT INTO TestTable VALUES ('Test')", sqlConn, tran))
+                        {
+                            await command.ExecuteNonQueryAsync();
+                        }
 
-			connector.Stop().GetAwaiter().GetResult();
-			Console.ReadLine();
-		}
-	}
+                        if (key.Key == ConsoleKey.R)
+                        {
+                            tran.Rollback(); // Simulate rollback
+                        }
+                        else
+                        {
+                            tran.Commit(); // Business as usual
+                        }
+                    }
+                }
+            }
+
+            await connector.Stop();
+            Console.ReadLine();
+        }
+    }
 }
