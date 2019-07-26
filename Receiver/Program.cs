@@ -15,7 +15,7 @@ namespace Receiver
 
         static async Task Start()
         {
-            var config = new EndpointConfiguration("Receiver");
+            var config = new EndpointConfiguration("WebApplication");
             var transport = config.UseTransport<RabbitMQTransport>();
             transport.ConnectionString("host=localhost");
             transport.UseConventionalRoutingTopology();
@@ -35,7 +35,7 @@ namespace Receiver
     {
         public Task Handle(MyMessage message, IMessageHandlerContext context)
         {
-            Console.WriteLine("MyMessage handled");
+            Console.WriteLine($"MyMessage handled {message.Message}");
             return Task.CompletedTask;
         }
     }

@@ -33,7 +33,7 @@ namespace Sender
         static async Task Start()
         {
             Console.Title = "Sender";
-            string connectionString = @"Data Source=(local);Initial Catalog=test3;Integrated Security=True;Max Pool Size=100";
+            string connectionString = @"Data Source=(local)\MYDEV;Initial Catalog=NsbSamplesSqlOutbox;Integrated Security=True;Max Pool Size=100";
             var storage = new SqlSubscriptionStorage(() => new SqlConnection(connectionString), "WebApplication",
                 new SqlDialect.MsSqlServer(), null);
             storage.Install().GetAwaiter().GetResult();
@@ -78,7 +78,7 @@ namespace Sender
                     {
                         var message = connector.GetSession(sqlConn, tran);
 
-                        await message.Publish(new MyMessage {Message = $"Test {key}"}).ConfigureAwait(false);
+                        await message.Publish(new MyMessage {Message = $"Test {key.Key}"}).ConfigureAwait(false);
 
                         using (var command = new SqlCommand("INSERT INTO TestTable VALUES ('Test')", sqlConn, tran))
                         {
