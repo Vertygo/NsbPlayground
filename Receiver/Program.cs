@@ -15,10 +15,11 @@ namespace Receiver
 
         static async Task Start()
         {
-            var config = new EndpointConfiguration("WebApplication");
+            var config = new EndpointConfiguration("Receiver");
             var transport = config.UseTransport<RabbitMQTransport>();
             transport.ConnectionString("host=localhost");
             transport.UseConventionalRoutingTopology();
+            config.EnableInstallers();
 
             var persistence = config.UsePersistence<InMemoryPersistence>();
 
