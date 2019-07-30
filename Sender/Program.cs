@@ -50,10 +50,6 @@ namespace Sender
                 customizeConnectedInterface: configuration => { configuration.EnableMessageDrivenPublishSubscribe(storage); });
             connectorConfig.AutoCreateQueues();
 
-            //Configure where to send messages
-            connectorConfig.RouteToEndpoint(
-                messageType: typeof(MyMessage),
-                endpointName: "Samples.ASPNETCore.Endpoint");
 
             //Start the connector
             var connector = connectorConfig.CreateConnector();
